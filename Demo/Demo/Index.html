@@ -4,9 +4,64 @@
     <script type="text/javascript" src="/Scripts/superscribe.js"></script>
 
     <script type="text/javascript">
+
+        var home = ʃ.route(function (o) {
+            return o / ʃ("home")
+                * new ʃ.final(function () { alert('home'); });
+        });
+
+        var about = ʃ.route(function (o) {
+            return o / ʃ("about")
+                * new ʃ.final(function () { alert('about'); });
+        });
+
+        var products = ʃ.route(function (o) {
+            return o / ʃ("products")
+                * new ʃ.action(function () { alert('products area'); })
+                * new ʃ.final(function () { alert('list products'); });
+        });
+
+        var bestsellers = ʃ.route(function (o) {
+            return products / ʃ("bestsellers") 
+                * new ʃ.final(function () { alert('best selling products'); });
+        });
+
+        var infoByName = ʃ.route(function (o) {
+            return products / ʃ.letters("name") 
+                * new ʃ.final(function (bag) { alert('info for product: ' + bag.parameters.name); });
+        });
+
+        var infoById = ʃ.route(function (o) {
+            return products / ʃ.alpha("id") 
+                * new ʃ.final(function (bag) { alert('info for product id: ' + bag.parameters.id); });
+        });
+
+        ʃ.listen();
+
     </script>
 </head>
 <body>
-    <a href="test">Test</a>
+    <a href="/home">Home</a>
+    <a href="/products">Products</a>
+    <a href="/products/bestsellers">Bestsellers</a>
+    <a href="/about">About</a>
+
+    <fieldset>
+        <legend>Find a product</legend>
+        <label for="search">By name or id:</label><input type="text" id="search" />
+        <button id="go">Find</button>
+    </fieldset>
+
+    <script>
+        $(document).ready(function () {
+            $("#go").click(function () {
+                var searchTerm = $("#search").val();
+                if (searchTerm) {
+                    ʃ.setLocation("/products/" + searchTerm);
+                }
+            });
+        });
+    </script>
+
 </body>
 </html>

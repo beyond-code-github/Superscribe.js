@@ -5,12 +5,12 @@
         window.ʃ = factory($);
     }
 })(function ($) {
-
     // fields
 
     var defaultLocationProxy;
     var hasHistory = !!(window.history && history.pushState);
 
+    var onLocationChanged = function () { };
 
     // private methods
 
@@ -30,15 +30,16 @@
 
         return false;
     };
-    
+
     var runRoute = function (route) {
         var info = {};
         var walker = new ʃ.RouteWalker(route, info);
-        walker.walkRoute();
+        return walker.walkRoute();
     };
 
     var locationChanged = function () {
         var route = proxy.getLocation();
+        onLocationChanged(route);
         runRoute(route);
     };
 
@@ -67,7 +68,6 @@
         });
 
         if (hasHistory) {
-
             // bind to popstate
             $(window).bind('popstate.' + this.eventNamespace(), function (e) {
                 locationChanged();
@@ -75,17 +75,16 @@
 
             // bind to link clicks that have routes
             $(document).delegate('a', 'click.history-' + this.eventNamespace(), function (e) {
-
                 if (e.isDefaultPrevented() || e.metaKey || e.ctrlKey) {
                     return;
                 }
 
                 var full_path = lp.fullPath(this),
                   // Get anchor's host name in a cross browser compatible way.
-                  // IE looses hostname property when setting href in JS 
+                  // IE looses hostname property when setting href in JS
                   // with a relative URL, e.g. a.setAttribute('href',"/whatever").
-                  // Circumvent this problem by creating a new link with given URL and 
-                  // querying that for a hostname. 
+                  // Circumvent this problem by creating a new link with given URL and
+                  // querying that for a hostname.
                   hostname = this.hostname ? this.hostname : function (a) {
                       var l = document.createElement("a");
                       l.href = a.href;
@@ -104,11 +103,9 @@
             lp._bindings = 0;
         }
         lp._bindings++;
-
     };
 
     defaultLocationProxy.prototype.unbind = function () {
-
         $(window).unbind('hashchange.' + this.eventNamespace());
         $(window).unbind('popstate.' + this.eventNamespace());
         $(document).undelegate('a', 'click.history-' + this.eventNamespace());
@@ -119,7 +116,6 @@
             window.clearInterval(defaultLocationProxy._interval);
             defaultLocationProxy._interval = null;
         }
-
     };
 
     defaultLocationProxy.prototype.getLocation = function () {
@@ -146,10 +142,29 @@
         }
     };
 
+    defaultLocationProxy.prototype.replaceLocation = function (new_location) {
+        if (/^([^#\/]|$)/.test(new_location)) { // non-prefixed url
+            if (hasHistory) {
+                new_location = '/' + new_location;
+            } else {
+                new_location = '#!/' + new_location;
+            }
+        }
+
+        if (new_location != this.getLocation()) {
+            // HTML5 History exists and new_location is a full path
+            if (hasHistory && /^\//.test(new_location)) {
+                history.replaceState({ path: new_location }, window.title, new_location);
+                locationChanged();
+            } else {
+                return (window.location = new_location);
+            }
+        }
+    };
+
     defaultLocationProxy.prototype.runRoute = runRoute;
 
     var proxy = new defaultLocationProxy(10);
-
 
     // Define superscribe object
 
@@ -165,9 +180,29 @@
     ʃ.RouteWalker = function (route) {
         var properties = {};
         properties.route = route;
+        properties.querystring = "";
         properties.info = {
             parameters: {}
         };
+
+        var parts = route.split("?");
+        if (parts.length > 0) {
+            route = parts[0];
+        }
+        if (parts.length > 1) {
+            properties.querystring = parts[1];
+        }
+
+        if (properties.querystring.length > 0) {
+            var queries = properties.querystring.split("&");
+            for (var index in queries) {
+                var query = queries[index];
+                if (query.indexOf("=") >= 0) {
+                    var operands = query.split("=");
+                    properties.info.parameters[operands[0]] = operands[1];
+                }
+            }
+        }
 
         properties.remainingSegments = route.split('/');
 
@@ -212,7 +247,6 @@
                     && match.edges
                     && match.edges.length > 0
                     && arrayFirst(match.edges, function (o) { return (o.isOptional || o.nonConsuming); }) == null) {
-
                     alert('incomplete match');
                     return;
                 }
@@ -226,7 +260,7 @@
             }
 
             if (onComplete && typeof onComplete == "function") {
-                onComplete(properties.info);
+                return onComplete(properties.info);
             }
         };
 
@@ -250,13 +284,18 @@
             return this.template === segment;
         };
         this.actionFunction = function (info, segment) { };
-        this.finalFunction = function (info) { };
+        this.finalFunction = null;
     };
 
     ʃ.SuperscribeNode.prototype.slash = function (nextNode) {
         nextNode.parent = this;
         this.edges.push(nextNode);
         return nextNode;
+    };
+
+    ʃ.SuperscribeNode.prototype.optional = function () {
+        this.isOptional = true;
+        return this;
     };
 
     ʃ.SuperscribeNode.prototype.base = function () {
@@ -273,9 +312,18 @@
 
     ʃ.baseNode = new ʃ.SuperscribeNode();
 
+    ʃ.proxy = function () {
+        return proxy;
+    };
+
     ʃ.listen = function () {
         proxy.bind();
+        locationChanged();
         return proxy;
+    };
+
+    ʃ.reset = function () {
+        ʃ.baseNode = new ʃ.SuperscribeNode();
     };
 
     ʃ.letters = function (name) {
@@ -290,11 +338,11 @@
 
     ʃ.alpha = function (name) {
         var node = new ʃ.SuperscribeNode();
-        node.pattern = /^[a-zA-Z0-9]+$/;
+        node.pattern = /^[a-zA-Z0-9-_]+$/;
         node.actionFunction = function (info, segment) {
             info.parameters[name] = segment;
         };
-        
+
         return node;
     };
 
@@ -315,30 +363,38 @@
 
             context.leftOperand = this;
         };
-        
+
         ʃ.final.prototype.valueOf = function () {
             if (context.leftOperand) {
                 context.leftOperand.finalFunction = this.func;
             }
         };
-        
+
         ʃ.action.prototype.valueOf = function () {
             if (context.leftOperand) {
                 context.leftOperand.actionFunction = this.func;
             }
         };
-        
+
         func(ʃ.baseNode);
         return context.leftOperand;
     };
 
     ʃ.runRoute = function (route) {
-        proxy.runRoute(route);
+        return proxy.runRoute(route);
     };
 
-    ʃ.setLocation = function(route) {
+    ʃ.setLocation = function (route) {
         proxy.setLocation(route);
     };
-    
+
+    ʃ.replaceLocation = function (route) {
+        proxy.replaceLocation(route);
+    };
+
+    ʃ.onLocationChanged = function (func) {
+        onLocationChanged = func;
+    };
+
     return ʃ;
 });

@@ -3,7 +3,6 @@
     using System;
     using System.IO;
 
-    using Superscribe.Models;
     using Superscribe.Owin;
 
     public class HtmlModule : SuperscribeOwinModule

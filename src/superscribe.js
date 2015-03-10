@@ -247,7 +247,7 @@
                     && match.edges
                     && match.edges.length > 0
                     && arrayFirst(match.edges, function (o) { return (o.isOptional || o.nonConsuming); }) == null) {
-                    alert('incomplete match');
+                    throw 'incomplete match - ' + properties.route;
                     return;
                 }
 
@@ -255,7 +255,7 @@
             }
 
             if (arrayFirst(properties.remainingSegments, function (o) { return !!o; }) != null) {
-                alert('extraneous match');
+                throw 'extraneous match - ' + properties.route + ' - remaining: ' + properties.remainingSegments;
                 return;
             }
 
